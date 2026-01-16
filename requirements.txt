@@ -1,0 +1,4 @@
+fastapi[all]
+sqlmodel
+psycopg2-binary
+uvicorn
