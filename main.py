@@ -1,4 +1,5 @@
 import os
+import bcrypt
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,16 +8,25 @@ from sqlmodel import Field, SQLModel, create_engine, Session, select
 from datetime import date, time, datetime, timedelta
 from typing import List, Optional
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 # --- SECURITY CONFIG ---
-# Tip: Set JWT_SECRET in your Railway variables for real production
-SECRET_KEY = os.getenv("JWT_SECRET", "disney-park-greeter-secret-key-2026")
+SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # 24 hours
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# --- PASSWORD HASHING (DIRECT BCRYPT) ---
+def hash_password(password: str) -> str:
+    pwd_bytes = password.encode('utf-8')
+    salt = bcrypt.gensalt()
+    hashed_password = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed_password.decode('utf-8')
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    password_bytes = plain_password.encode('utf-8')
+    hashed_bytes = hashed_password.encode('utf-8')
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 # --- DATA MODELS ---
 class User(SQLModel, table=True):
@@ -45,8 +55,9 @@ def create_db_and_tables():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # This runs on startup
     create_db_and_tables()
-    print("Database connected and tables created")
+    print("Database connected and tables verified/created")
     yield
 
 # --- APP INITIALIZATION ---
@@ -89,7 +100,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == form_data.username)).first()
-    if not user or not pwd_context.verify(form_data.password, user.hashed_password):
+    
+    # Using the direct bcrypt verify function
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -99,16 +112,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessi
     
     return {"access_token": encoded_jwt, "token_type": "bearer"}
 
-# For testing: A simple register endpoint to create your first user
 @app.post("/register")
 def register(username: str, password: str, session: Session = Depends(get_session)):
-    hashed = pwd_context.hash(password)
+    # Using the direct bcrypt hash function
+    hashed = hash_password(password)
     new_user = User(username=username, hashed_password=hashed)
     session.add(new_user)
     session.commit()
     return {"message": "User created successfully"}
 
-# --- SHIFT ENDPOINTS (NOW PROTECTED) ---
+# --- SHIFT ENDPOINTS (PROTECTED) ---
 
 @app.get("/")
 def home():
