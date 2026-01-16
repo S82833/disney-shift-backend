@@ -17,7 +17,7 @@ class Shift(SQLModel, table=True):
     posted_by: str
 
 # --- CONFIGURACIÓN DE BASE DE DATOS ---
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:zTHpnwTbgzcgpIrQVOiHIPhvjvmyXbCB@gondola.proxy.rlwy.net:51669/railway")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Fix para compatibilidad de SQLAlchemy con Postgres
 if DATABASE_URL.startswith("postgres://"):
