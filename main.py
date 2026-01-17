@@ -33,13 +33,14 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True)
-    email: str = Field(unique=True, index=True)  # New Field
+    email: str = Field(unique=True, index=True)
+    contact_info: Optional[str] = Field(default=None)
     hashed_password: str
 
 class UserCreate(SQLModel):
-    """Schema for incoming registration data"""
     username: str
     email: str
+    contact_info: Optional[str] = None
     password: str
 
 class Shift(SQLModel, table=True):
@@ -153,11 +154,23 @@ def create_shift(shift: Shift, session: Session = Depends(get_session), current_
     session.refresh(shift)
     return shift
 
-@app.get("/shifts/", response_model=List[Shift])
+@app.get("/shifts/")
 def read_shifts(session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
-    statement = select(Shift).order_by(Shift.shift_date)
-    shifts = session.exec(statement).all()
-    return shifts
+    # This query gets the shift AND the contact_info from the User table
+    results = session.exec(
+        select(Shift, User.contact_info)
+        .join(User, Shift.posted_by == User.username)
+        .order_by(Shift.shift_date)
+    ).all()
+    
+    # Format the data so the frontend gets a clean list
+    shifts_with_contact = []
+    for shift, contact in results:
+        shift_data = shift.model_dump()
+        shift_data["contact_info"] = contact
+        shifts_with_contact.append(shift_data)
+        
+    return shifts_with_contact
 
 @app.delete("/shifts/{shift_id}")
 def delete_shift(shift_id: int, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
