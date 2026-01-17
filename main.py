@@ -147,13 +147,20 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessi
 def home():
     return {"message": "Disney Shift Exchange API is running!"}
 
+from datetime import date, datetime # Make sure date is imported
+
 @app.post("/shifts/", response_model=Shift)
 def create_shift(
     shift: Shift, 
     session: Session = Depends(get_session), 
     current_user: User = Depends(get_current_user)
 ):
-    if shift.shift_date < date.today():
+    if isinstance(shift.shift_date, str):
+        shift_date_obj = datetime.strptime(shift.shift_date, "%Y-%m-%d").date()
+    else:
+        shift_date_obj = shift.shift_date
+
+    if shift_date_obj < date.today():
         raise HTTPException(status_code=400, detail="You cannot post a shift in the past.")
 
     start = datetime.strptime(shift.start_time, "%H:%M")
@@ -162,6 +169,7 @@ def create_shift(
     if start == end:
         raise HTTPException(status_code=400, detail="Start and End time cannot be the same.")
 
+    # Set the owner and save
     shift.posted_by = current_user.username
     session.add(shift)
     session.commit()
