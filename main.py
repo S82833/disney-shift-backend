@@ -119,7 +119,9 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     new_user = User(
         username=user_data.username, 
         email=user_data.email, 
+        contact_info=user_data.contact_info,
         hashed_password=hashed
+
     )
     session.add(new_user)
     session.commit()
