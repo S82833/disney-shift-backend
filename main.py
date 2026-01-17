@@ -10,7 +10,7 @@ from typing import List, Optional
 from jose import JWTError, jwt
 
 # --- SECURITY CONFIG ---
-SECRET_KEY = os.getenv("JWT_SECRET")
+SECRET_KEY = os.getenv("JWT_SECRET", "disney-park-greeter-secret-key-2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 
@@ -29,10 +29,18 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 # --- DATA MODELS ---
+
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(unique=True, index=True)
+    email: str = Field(unique=True, index=True)  # New Field
     hashed_password: str
+
+class UserCreate(SQLModel):
+    """Schema for incoming registration data"""
+    username: str
+    email: str
+    password: str
 
 class Shift(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -55,7 +63,6 @@ def create_db_and_tables():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # This runs on startup
     create_db_and_tables()
     print("Database connected and tables verified/created")
     yield
@@ -97,11 +104,30 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
 
 # --- AUTH ENDPOINTS ---
 
+@app.post("/register")
+def register(user_data: UserCreate, session: Session = Depends(get_session)):
+    # Check if username or email already exists
+    existing_user = session.exec(
+        select(User).where((User.username == user_data.username) | (User.email == user_data.email))
+    ).first()
+    
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username or Email already registered")
+
+    hashed = hash_password(user_data.password)
+    new_user = User(
+        username=user_data.username, 
+        email=user_data.email, 
+        hashed_password=hashed
+    )
+    session.add(new_user)
+    session.commit()
+    return {"message": "User created successfully"}
+
 @app.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Session = Depends(get_session)):
     user = session.exec(select(User).where(User.username == form_data.username)).first()
     
-    # Using the direct bcrypt verify function
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect username or password")
     
@@ -111,15 +137,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: Sessi
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     
     return {"access_token": encoded_jwt, "token_type": "bearer"}
-
-@app.post("/register")
-def register(username: str, password: str, session: Session = Depends(get_session)):
-    # Using the direct bcrypt hash function
-    hashed = hash_password(password)
-    new_user = User(username=username, hashed_password=hashed)
-    session.add(new_user)
-    session.commit()
-    return {"message": "User created successfully"}
 
 # --- SHIFT ENDPOINTS (PROTECTED) ---
 
