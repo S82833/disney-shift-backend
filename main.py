@@ -164,6 +164,11 @@ def delete_shift(shift_id: int, session: Session = Depends(get_session), current
     shift = session.get(Shift, shift_id)
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+    
+    # OWNERSHIP CHECK
+    if shift.posted_by != current_user.username:
+        raise HTTPException(status_code=403, detail="You can only delete your own shifts")
+    
     session.delete(shift)
     session.commit()
     return {"ok": True}
@@ -173,6 +178,10 @@ def update_shift(shift_id: int, updated_data: Shift, session: Session = Depends(
     db_shift = session.get(Shift, shift_id)
     if not db_shift:
         raise HTTPException(status_code=404, detail="Shift not found")
+    
+    # OWNERSHIP CHECK
+    if db_shift.posted_by != current_user.username:
+        raise HTTPException(status_code=403, detail="You can only edit your own shifts")
     
     shift_data = updated_data.model_dump(exclude_unset=True)
     for key, value in shift_data.items():
