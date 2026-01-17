@@ -146,6 +146,8 @@ def home():
 
 @app.post("/shifts/", response_model=Shift)
 def create_shift(shift: Shift, session: Session = Depends(get_session), current_user: User = Depends(get_current_user)):
+    shift.posted_by = current_user.username 
+    
     session.add(shift)
     session.commit()
     session.refresh(shift)
