@@ -73,7 +73,7 @@ app = FastAPI(title="Disney Shift Exchange API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173/", "https://disney-shift-frontend-production.up.railway.app", "https://shifts.signalvise.com/login"],
+    allow_origins=["http://localhost:5173/", "https://disney-shift-frontend-production.up.railway.app", "https://shifts.signalvise.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
